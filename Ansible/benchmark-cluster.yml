@@ -1,0 +1,72 @@
+---
+- hosts: localhost
+  gather_facts: yes
+  become: yes
+  tasks:
+    - name: update Debian
+      ansible.builtin.apt:
+        update_cache: yes
+      when: ansible_os_family == 'Debian'
+
+    - name: update RedHat
+      ansible.builtin.yum:
+        update_cache: yes
+      when: ansible_os_family == 'RedHat'
+
+    - ansible.builtin.package:
+        name:
+          - wrk
+        state: present
+
+
+- hosts: master
+  tasks:
+    - name: remove whoami service
+      command: "sudo docker service rm whoami"
+      become: yes
+      ignore_errors: True
+
+# I want to run the whoami service with 1, 2, 4, 8 replicas
+    - name: create whoami service
+      command: "sudo docker service create --name whoami --publish published=8080,target=80 --replicas 1 containous/whoami"
+      become: yes
+      # with_items:
+      #   - 1
+        # - 2
+        # - 4
+        # - 8
+
+
+- hosts: localhost
+  gather_facts: yes
+  tasks:
+    - name: wrk 1
+      command: "sudo wrk -t4 -c5 -d30s http://{{ hostvars | first }}:8080"
+      register: wrk_output
+
+    - name:
+      ansible.builtin.debug:
+        msg: '{{ wrk_output.stdout_lines | select("search", "Req/Sec") }}'
+
+
+# REPEAT FOR SCALE 2,4,8
+- hosts: master
+  tasks:
+
+# I am not sure if this task should be run again
+    # - name: remove whoami service
+    #   command: "sudo docker service rm whoami"
+    #   become: yes
+    #   ignore_errors: True
+
+# this is my attempt at running the benchmark for multiple instances. 
+# The loop here is working and an attempt is made for the differen items. However, I am getting errors on port assignment.
+# as you can see I also tried fixing this by incrementing the port number bu to no avail. After this my set time for this assignment was up.
+    - name: create whoami service
+      command: "sudo docker service create --name whoami --publish published={{ 8080 + (item * 100) }},target=80 --replicas {{ item }} containous/whoami"
+      become: yes
+      with_items:
+        - 1
+        - 2
+        - 4
+        - 8
