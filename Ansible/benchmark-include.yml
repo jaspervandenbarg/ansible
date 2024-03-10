@@ -1,0 +1,11 @@
+---
+- hosts: localhost
+  gather_facts: yes
+  tasks:
+    - name: wrk 1
+      command: "sudo wrk -t4 -c5 -d30s http://{{ hostvars | first }}:8080"
+      register: wrk_output
+
+    - name:
+      ansible.builtin.debug:
+        msg: '{{ wrk_output.stdout_lines | select("search", "Req/Sec") }}'
